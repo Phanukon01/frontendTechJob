@@ -15,6 +15,7 @@ import AdminRecord from "./Admin/AdminRecord.jsx";
 import AdminSetting from "./Admin/AdminSetting.jsx";
 import AdminWork from "./Admin/AdminWork.jsx";
 import AdminAccount from "./Admin/AdminAccount.jsx";
+import MaterialList from "./Admin/AdminMaterial.jsx";
 
 import ManagerDashboard from "./Manager/ManagerDashboard.jsx";
 import ManagerLayout from "./layouts/ManagerLayout.jsx";
@@ -87,10 +88,7 @@ export default function App() {
         {/* Admin Routes */}
         <Route element={<AdminLayout onLogout={handleLogout} />}>
           {/* --- แก้ไขจุดนี้: ส่ง { tasks: tasks } เข้าไปให้ AdminDashboard --- */}
-          <Route path="/admin" element={
-            getDashboardElement(AdminDashboard, 'admin', { tasks: tasks })
-          } />
-
+          <Route path="/admin" element={getDashboardElement(AdminDashboard, 'admin', { tasks: tasks })} />
           <Route path="work" element={<AdminWork />} />
 
           {/* AdminRecord มีการอัปเดต tasks อยู่แล้ว Code ส่วนนี้ถูกต้องแล้ว */}
@@ -105,6 +103,7 @@ export default function App() {
 
           <Route path="setting" element={<AdminSetting />} />
           <Route path="account" element={<AdminAccount />} />
+          <Route path="material" element={<MaterialList />} />
         </Route>
 
         {/* ... Manager Routes และ Leader Routes คงเดิม ... */}

@@ -1,10 +1,11 @@
 import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { Button, Form, Dropdown, Table, Badge, InputGroup } from 'react-bootstrap';
 import Modal from 'react-bootstrap/Modal';
-// ดึงข้อมูลรายชื่อช่าง
-import { getTechnicians } from '../data/dataCore';
+const API_URL = 'http://localhost:3000';
 
-const AdminRecord = ({ works, setWorks, tasks, setTasks }) => {
+const AdminRecord = () => {
+  const [works, setWorks] = useState([]);
+  const [supervisors, setSupervisors] = useState([]);
 
   // --- State ---
   const [show, setShow] = useState(false);
@@ -41,9 +42,29 @@ const AdminRecord = ({ works, setWorks, tasks, setTasks }) => {
   const moneyRef = useRef();
   const costRef = useRef(); // **เพิ่ม: ตัวดึงค่าต้นทุน**
 
+  const fetchWorks = async () => {
+    try {
+      const res = await fetch(`${API_URL}/works/getAll`);
+      const data = await res.json();
+      setWorks(data.works || []);
+    } catch (err) {
+      console.error(err);
+    }
+  };
+
+  const fetchSupervisors = async () => {
+    try {
+      const res = await fetch(`${API_URL}/users/role/supervisor`);
+      const data = await res.json();
+      setSupervisors(data.users || []);
+    } catch (err) {
+      console.error(err);
+    }
+  };
+
   useEffect(() => {
-    const techs = getTechnicians();
-    setTechniciansList(techs);
+    fetchWorks();
+    fetchSupervisors();
   }, []);
 
   const generateNewId = () => {
@@ -63,7 +84,6 @@ const AdminRecord = ({ works, setWorks, tasks, setTasks }) => {
 
   const handleShow = () => {
     setIsEditMode(false);
-    setGeneratedId(generateNewId());
     setSelectedWorkType('');
     setAddressInput('');
     setMapLocation({ lat: 13.7563, lng: 100.5018 });
@@ -72,31 +92,18 @@ const AdminRecord = ({ works, setWorks, tasks, setTasks }) => {
 
   const handleEdit = (work) => {
     setIsEditMode(true);
-    setEditingId(work.id);
-    setGeneratedId(work.id);
-
-    setSelectedWorkType(work.typework);
-    setAddressInput(work.location?.address || work.role);
-    setMapLocation(work.location || { lat: 13.7563, lng: 100.5018 });
-
+    setEditingId(work.work_id);
+    setSelectedWorkType(work.job_type || '');
+    setAddressInput(work.location || '');
+    setMapLocation({ lat: 13.7563, lng: 100.5018 });
     setShow(true);
 
     setTimeout(() => {
-      if (nameWorkRef.current) nameWorkRef.current.value = work.namework;
-      if (detailRef.current) detailRef.current.value = work.detail;
-      if (dateWorkRef.current) dateWorkRef.current.value = work.datework;
-      if (nameCustomerRef.current) nameCustomerRef.current.value = work.nameCustomer;
-
-      // ดึงค่าเงินมาใส่
-      if (moneyRef.current) moneyRef.current.value = work.money || '';
-      // **ดึงค่าต้นทุนมาใส่ (ถ้ามี)**
-      if (costRef.current) costRef.current.value = work.cost || '';
-
-      if (work.time) {
-        const [start, end] = work.time.split(' - ');
-        if (timeStartRef.current) timeStartRef.current.value = start;
-        if (timeEndRef.current) timeEndRef.current.value = end;
-      }
+      if (nameWorkRef.current) nameWorkRef.current.value = work.job_name || '';
+      if (detailRef.current) detailRef.current.value = work.job_detail || '';
+      if (dateWorkRef.current) dateWorkRef.current.value = work.start_date ? work.start_date.split('T')[0] : '';
+      if (nameCustomerRef.current) nameCustomerRef.current.value = work.customer_name || '';
+      if (timeStartRef.current) timeStartRef.current.value = work.work_time || '09:00';
     }, 100);
   };
 
@@ -135,80 +142,84 @@ const AdminRecord = ({ works, setWorks, tasks, setTasks }) => {
     handleCloseMap();
   };
 
-  // --- Save Logic ---
-  const saveWork = () => {
-    const namework = nameWorkRef.current.value.trim();
-    const detail = detailRef.current.value.trim();
-    const datework = dateWorkRef.current.value;
-    const timeStart = timeStartRef.current.value;
-    const timeEnd = timeEndRef.current.value;
-    const nameCustomer = nameCustomerRef.current.value;
-    const money = moneyRef.current.value;
-    const cost = costRef.current.value; // **รับค่าต้นทุน**
+  // --- Save Logic --- ส่งเข้า API
+  const saveWork = async () => {
+    const job_name = nameWorkRef.current?.value.trim();
+    const job_detail = detailRef.current?.value.trim();
+    const start_date = dateWorkRef.current?.value;
+    const work_time = timeStartRef.current?.value;
+    const customer_name = nameCustomerRef.current?.value;
 
-    // เช็คว่ากรอกครบไหม (ถ้าต้นทุนไม่กรอก ให้ถือว่าเป็น 0 ได้ ไม่ต้องบังคับ)
-    if (!namework || !selectedWorkType || !detail || !addressInput || !datework || !timeStart || !timeEnd || !nameCustomer || !money) {
-      alert('กรุณากรอกข้อมูลให้ครบถ้วน (ยกเว้นต้นทุน สามารถระบุภายหลังได้)');
+    if (!job_name || !selectedWorkType || !job_detail || !addressInput || !start_date || !customer_name) {
+      alert('กรุณากรอกข้อมูลให้ครบถ้วน');
       return;
     }
 
-    const workData = {
-      namework: namework,
-      typework: selectedWorkType,
-      detail: detail,
-      role: addressInput,
-      assigneeId: null,
-      technicianName: "รอจ่ายงาน",
-      datework: datework,
-      nameCustomer: nameCustomer,
-      time: `${timeStart} - ${timeEnd}`,
-
-      money: parseFloat(money),
-      // **บันทึกต้นทุนลงระบบ** (ถ้าไม่กรอกให้เป็น 0)
-      cost: parseFloat(cost) || 0,
-
-      location: {
-        address: addressInput,
-        lat: mapLocation.lat,
-        lng: mapLocation.lng
-      },
-      materials: [],
+    const body = {
+      job_name,
+      customer_name,
+      job_type: selectedWorkType,
+      job_detail,
+      location: addressInput,
+      start_date,
+      work_time,
+      supervisor_id: parseInt(supervisorId) || 2,
+      admin_id: parseInt(localStorage.getItem('user_id')) || 1
     };
 
-    if (isEditMode) {
-      setWorks(works.map(w => {
-        if (w.id === editingId) {
-          return { ...w, ...workData };
-        }
-        return w;
-      }));
-    } else {
-      const newWork = {
-        id: generatedId,
-        ...workData,
-        status: "Draft",
-        completed: false,
-      };
-      setWorks([newWork, ...works]);
-    }
+    try {
+      let res;
+      if (isEditMode) {
+        res = await fetch(`${API_URL}/works/update/${editingId}`, {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(body)
+        });
+      } else {
+        res = await fetch(`${API_URL}/works/creatework`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(body)
+        });
+      }
 
-    handleClose();
+      if (res.ok) {
+        await fetchWorks();
+        handleClose();
+        alert(isEditMode ? '✅ แก้ไขใบงานสำเร็จ' : '✅ สร้างใบงานสำเร็จ');
+      } else {
+        const err = await res.json();
+        alert('❌ เกิดข้อผิดพลาด: ' + (err.message || 'ไม่ทราบสาเหตุ'));
+      }
+    } catch (err) {
+      console.error(err);
+      alert('❌ ไม่สามารถเชื่อมต่อ server ได้');
+    }
   };
 
-  const handleSendToLeader = (id) => {
-    if (window.confirm('ยืนยันการส่งใบงานนี้ให้หัวหน้างาน (Leader)?')) {
-      setWorks(works.map(w => {
-        if (w.id === id) {
-          return { ...w, status: "Pending" };
-        }
-        return w;
-      }));
+  const handleSendToLeader = async (id) => {
+    if (window.confirm('ยืนยันการส่งใบงานนี้ให้หัวหน้างาน?')) {
+      try {
+        await fetch(`${API_URL}/works/${id}/status`, {
+          method: 'PATCH',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ status: 'มอบหมายแล้ว' })
+        });
+        await fetchWorks();
+      } catch (err) {
+        console.error(err);
+      }
     }
   };
 
-  const handleDelete = (id) => {
-    if (window.confirm('ต้องการลบประวัติงานนี้ใช่หรือไม่?')) {
-      setWorks(works.filter(work => work.id !== id));
+  const handleDelete = async (id) => {
+    if (window.confirm('ต้องการลบใบงานนี้ใช่หรือไม่?')) {
+      try {
+        await fetch(`${API_URL}/works/delete/${id}`, { method: 'DELETE' });
+        await fetchWorks();
+      } catch (err) {
+        console.error(err);
+      }
     }
   };
 
@@ -218,36 +229,30 @@ const AdminRecord = ({ works, setWorks, tasks, setTasks }) => {
       const searchLower = searchTerm.toLowerCase();
       filtered = filtered.filter((work) => {
         return (
-          (work.namework && work.namework.toLowerCase().includes(searchLower)) ||
-          (work.nameCustomerm && work.nameCustomerm.toLowerCase().includes(searchLower)) ||
-          (work.id && work.id.toString().includes(searchTerm))
+          (work.job_name && work.job_name.toLowerCase().includes(searchLower)) ||
+          (work.customer_name && work.customer_name.toLowerCase().includes(searchLower)) ||
+          (work.work_id && work.work_id.toString().includes(searchTerm))
         );
       });
     }
-    if (selectedType) filtered = filtered.filter(work => work.typework === selectedType);
+    if (selectedType) filtered = filtered.filter(work => work.job_type === selectedType);
 
-    if (selectedStatus) {
-      if (selectedStatus === 'completed') filtered = filtered.filter(work => work.completed || work.status === 'Approved');
-      else if (selectedStatus === 'inspection') filtered = filtered.filter(work => work.status === 'PendingInspection');
-      else if (selectedStatus === 'revision') filtered = filtered.filter(work => work.status === 'Revision');
-      else if (selectedStatus === 'assigned') filtered = filtered.filter(work => work.status === 'Assigned');
-      else if (selectedStatus === 'pending') filtered = filtered.filter(work => !work.completed && work.status === 'Pending');
-      else if (selectedStatus === 'draft') filtered = filtered.filter(work => work.status === 'Draft');
-    }
+    if (selectedStatus) filtered = filtered.filter(work => work.status === selectedStatus);
+
     return filtered;
   }, [works, searchTerm, selectedType, selectedTime, selectedStatus]);
 
   useEffect(() => { setCurPage(1); }, [searchTerm, selectedType, selectedTime, selectedStatus]);
 
   const getStatusBadge = (work) => {
-    if (work.status === 'Approved' || work.completed) return <Badge bg="success">เสร็จสิ้น (Approved)</Badge>;
     switch (work.status) {
-      case 'Draft': return <Badge bg="secondary" text="light">ฉบับร่าง (Admin)</Badge>;
-      case 'Pending': return <Badge bg="info" text="dark">รอจ่ายงาน (Leader)</Badge>;
-      case 'Assigned': return <Badge bg="primary">มอบหมายแล้ว (ช่าง)</Badge>;
-      case 'PendingInspection': return <Badge bg="warning" text="dark">รอตรวจสอบ (Leader)</Badge>;
-      case 'Revision': return <Badge bg="danger">ส่งกลับแก้ไข</Badge>;
-      default: return <Badge bg="light" text="dark">กำลังดำเนินการ</Badge>;
+      case 'รอดำเนินการ': return <Badge bg="secondary">รอดำเนินการ</Badge>;
+      case 'มอบหมายแล้ว': return <Badge bg="primary">มอบหมายแล้ว</Badge>;
+      case 'กำลังดำเนินการ': return <Badge bg="info" text="dark">กำลังดำเนินการ</Badge>;
+      case 'รอตรวจงาน': return <Badge bg="warning" text="dark">รอตรวจงาน</Badge>;
+      case 'เสร็จสิ้น': return <Badge bg="success">เสร็จสิ้น</Badge>;
+      case 'ส่งกลับแก้ไข': return <Badge bg="danger">ส่งกลับแก้ไข</Badge>;
+      default: return <Badge bg="light" text="dark">{work.status}</Badge>;
     }
   };
 
@@ -258,11 +263,11 @@ const AdminRecord = ({ works, setWorks, tasks, setTasks }) => {
   const goToNext = () => setCurPage(prev => Math.min(prev + 1, totalPages));
   const goToPrev = () => setCurPage(prev => Math.max(prev - 1, 1));
 
-  const workTypes = [...new Set(works.map(work => work.typework))];
-  const availableWorkTypes = [...new Set(techniciansList.map(t => t.typework))];
+  const workTypes = [...new Set(works.map(work => work.job_type).filter(Boolean))];
   const totalWorks = works.length;
-  const completedWorks = works.filter(w => w.completed).length;
+  const completedWorks = works.filter(w => w.status === 'เสร็จสิ้น').length;
   const inProgressWorks = totalWorks - completedWorks;
+  const [supervisorId, setSupervisorId] = useState('');
 
   return (
     <div className="p-4" style={{ width: '100%', minHeight: '100vh', marginLeft: '14rem' }}>
@@ -278,16 +283,23 @@ const AdminRecord = ({ works, setWorks, tasks, setTasks }) => {
         <Modal.Body>
           <Form>
             <div className="row">
-              <div className="col-md-4">
-                <Form.Group className="mb-3">
-                  <Form.Label>รหัสใบงาน (Auto)</Form.Label>
-                  <Form.Control value={generatedId} readOnly className="bg-light fw-bold text-primary" />
-                </Form.Group>
-              </div>
               <div className="col-md-8">
                 <Form.Group className="mb-3">
                   <Form.Label>ชื่องาน <span className="text-danger">*</span></Form.Label>
                   <Form.Control ref={nameWorkRef} placeholder="ระบุชื่องาน" autoFocus />
+                </Form.Group>
+              </div>
+              <div className="col-md-4">
+                <Form.Group className="mb-3">
+                  <Form.Label>ประเภทงาน <span className="text-danger">*</span></Form.Label>
+                  <Form.Select value={selectedWorkType} onChange={(e) => setSelectedWorkType(e.target.value)}>
+                    <option value="">-- เลือกประเภทงาน --</option>
+                    <option value="งานไฟฟ้า">งานไฟฟ้า</option>
+                    <option value="งานประปา">งานประปา</option>
+                    <option value="งานซ่อม">งานซ่อม</option>
+                    <option value="งานติดตั้ง">งานติดตั้ง</option>
+                    <option value="อื่นๆ">อื่นๆ</option>
+                  </Form.Select>
                 </Form.Group>
               </div>
             </div>
@@ -295,17 +307,19 @@ const AdminRecord = ({ works, setWorks, tasks, setTasks }) => {
             <div className="row">
               <div className="col-md-6">
                 <Form.Group className="mb-3">
-                  <Form.Label>ประเภทงาน <span className="text-danger">*</span></Form.Label>
-                  <Form.Select value={selectedWorkType} onChange={(e) => setSelectedWorkType(e.target.value)}>
-                    <option value="">-- เลือกประเภทงาน --</option>
-                    {availableWorkTypes.map((type, i) => <option key={i} value={type}>{type}</option>)}
+                  <Form.Label>หัวหน้าช่าง <span className="text-danger">*</span></Form.Label>
+                  <Form.Select value={supervisorId} onChange={(e) => setSupervisorId(e.target.value)}>
+                    <option value="">-- เลือกหัวหน้าช่าง --</option>
+                    {supervisors.map(s => (
+                      <option key={s.user_id} value={s.user_id}>{s.name}</option>
+                    ))}
                   </Form.Select>
                 </Form.Group>
               </div>
               <div className="col-md-6">
                 <Form.Group className="mb-3">
-                  <Form.Label>สถานะมอบหมาย</Form.Label>
-                  <Form.Control value="รอส่งให้หัวหน้างาน (Leader)" readOnly className="bg-light text-muted" />
+                  <Form.Label>สถานะ</Form.Label>
+                  <Form.Control value="รอดำเนินการ" readOnly className="bg-light text-muted" />
                 </Form.Group>
               </div>
             </div>
@@ -340,36 +354,19 @@ const AdminRecord = ({ works, setWorks, tasks, setTasks }) => {
                 <Form.Label>ชื่อลูกค้า <span className="text-danger">*</span></Form.Label>
                 <Form.Control ref={nameCustomerRef} type="text" placeholder="ระบุชื่อลูกค้า" />
               </Form.Group>
-
-              <Form.Group className="mb-3 w-25 mr-2">
-                <Form.Label>งานมูลค่า (บาท) <span className="text-danger">*</span></Form.Label>
-                <Form.Control ref={moneyRef} type="number" placeholder="รายรับ" />
-              </Form.Group>
-
-              {/* **เพิ่ม: ช่องกรอกต้นทุน** */}
-              <Form.Group className="mb-3 w-25">
-                <Form.Label>ต้นทุน (บาท)</Form.Label>
-                <Form.Control ref={costRef} type="number" placeholder="รายจ่าย" className="border-danger" />
-              </Form.Group>
             </div>
 
             <div className="row">
-              <div className="col-md-4">
+              <div className="col-md-6">
                 <Form.Group className="mb-3">
                   <Form.Label>วันที่ <span className="text-danger">*</span></Form.Label>
                   <Form.Control ref={dateWorkRef} type="date" />
                 </Form.Group>
               </div>
-              <div className="col-md-4">
+              <div className="col-md-6">
                 <Form.Group className="mb-3">
                   <Form.Label>เวลาเริ่ม</Form.Label>
                   <Form.Control ref={timeStartRef} type="time" defaultValue="09:00" />
-                </Form.Group>
-              </div>
-              <div className="col-md-4">
-                <Form.Group className="mb-3">
-                  <Form.Label>เวลาสิ้นสุด</Form.Label>
-                  <Form.Control ref={timeEndRef} type="time" defaultValue="17:00" />
                 </Form.Group>
               </div>
             </div>
@@ -440,64 +437,39 @@ const AdminRecord = ({ works, setWorks, tasks, setTasks }) => {
             <div>
               <div className="d-flex justify-content-between align-items-center mb-4 pb-3 border-bottom">
                 <div>
-                  <h5 className="mb-1">{selectedWork.namework}</h5>
-                  <small className="text-muted">รหัส: {selectedWork.id}</small>
+                  <h5 className="mb-1">{selectedWork.job_name}</h5>
+                  <small className="text-muted">รหัส: #{selectedWork.work_id}</small>
                 </div>
                 {getStatusBadge(selectedWork)}
               </div>
               <div className="row mb-3">
                 <div className="col-md-6">
-                  <p className="mb-1 text-muted"><small>ช่างผู้รับผิดชอบ</small></p>
-                  <p className="fw-bold">{selectedWork.technicianName || '-'}</p>
+                  <p className="mb-1 text-muted"><small>ลูกค้า</small></p>
+                  <p className="fw-bold">{selectedWork.customer_name || '-'}</p>
                 </div>
                 <div className="col-md-6">
                   <p className="mb-1 text-muted"><small>ประเภทงาน</small></p>
-                  <p className="fw-bold">{selectedWork.typework}</p>
-                </div>
-              </div>
-              {/* แสดงเงินและต้นทุน */}
-              <div className="row mb-3">
-                <div className="col-md-6">
-                  <p className="mb-1 text-muted"><small>มูลค่างาน (รายรับ)</small></p>
-                  <p className="fw-bold text-success">
-                    {selectedWork.money ? selectedWork.money.toLocaleString() : '0'} บาท
-                  </p>
-                </div>
-                <div className="col-md-6">
-                  <p className="mb-1 text-muted"><small>ต้นทุน (รายจ่าย)</small></p>
-                  <p className="fw-bold text-danger">
-                    {selectedWork.cost ? selectedWork.cost.toLocaleString() : '0'} บาท
-                  </p>
+                  <p className="fw-bold">{selectedWork.job_type || '-'}</p>
                 </div>
               </div>
 
               <p className="mb-1 text-muted"><small>สถานที่</small></p>
               <div className="alert alert-light border">
                 <i className="bi bi-geo-alt text-danger me-2"></i>
-                {selectedWork.role}
-                {selectedWork.location && selectedWork.location.lat && (
-                  <div className="mt-2 ratio ratio-21x9">
-                    <iframe
-                      src={`https://maps.google.com/maps?q=${selectedWork.location.lat},${selectedWork.location.lng}&z=15&output=embed`}
-                      title="Work Location"
-                      style={{ border: 0, borderRadius: '8px' }}
-                      loading="lazy"
-                    ></iframe>
-                  </div>
-                )}
+                {selectedWork.location || '-'}
               </div>
               <div>
-                <p className="mb-1 text-muted me-5 "><small>รายละเอียด</small></p>
-                <p className=''>{selectedWork.detail}</p>
+                <p className="mb-1 text-muted me-5"><small>รายละเอียด</small></p>
+                <p>{selectedWork.job_detail || '-'}</p>
               </div>
               <div className='d-flex justify-content-between'>
                 <div>
                   <p className="mb-1 text-muted me-5"><small>ชื่อลูกค้า</small></p>
-                  <p>{selectedWork.nameCustomer}</p>
+                  <p>{selectedWork.customer_name || '-'}</p>
                 </div>
                 <div>
-                  <p className="mb-1 text-muted"><small>วันที่และเวลา</small></p>
-                  <p>{selectedWork.datework}</p>
+                  <p className="mb-1 text-muted"><small>วันที่เริ่มงาน</small></p>
+                  <p>{selectedWork.start_date ? new Date(selectedWork.start_date).toLocaleDateString('th-TH') : '-'}</p>
                 </div>
               </div>
             </div>
@@ -571,12 +543,12 @@ const AdminRecord = ({ works, setWorks, tasks, setTasks }) => {
             <div className="col-md-3">
               <Form.Select value={selectedStatus} onChange={(e) => setSelectedStatus(e.target.value)}>
                 <option value="">สถานะทั้งหมด</option>
-                <option value="draft">ฉบับร่าง (ยังไม่ส่ง)</option>
-                <option value="pending">รอจ่ายงาน (ส่งแล้ว)</option>
-                <option value="assigned">มอบหมายแล้ว (กำลังทำ)</option>
-                <option value="inspection">รอตรวจสอบ (ส่งงานแล้ว)</option>
-                <option value="revision">ต้องแก้ไขงาน</option>
-                <option value="completed">เสร็จสิ้น</option>
+                <option value="รอดำเนินการ">รอดำเนินการ</option>
+                <option value="มอบหมายแล้ว">มอบหมายแล้ว</option>
+                <option value="กำลังดำเนินการ">กำลังดำเนินการ</option>
+                <option value="รอตรวจงาน">รอตรวจงาน</option>
+                <option value="เสร็จสิ้น">เสร็จสิ้น</option>
+                <option value="ส่งกลับแก้ไข">ส่งกลับแก้ไข</option>
               </Form.Select>
             </div>
             <div className="col-md-3">
@@ -611,15 +583,15 @@ const AdminRecord = ({ works, setWorks, tasks, setTasks }) => {
               <tbody className="text-center">
                 {paginatedWorks.length > 0 ? (
                   paginatedWorks.map((work) => (
-                    <tr key={work.id}>
-                      <td><Badge bg="secondary">{work.id}</Badge></td>
-                      <td className="text-start fw-semibold">{work.namework}</td>
-                      <td><Badge bg="info" text="dark">{work.typework}</Badge></td>
-                      <td>{new Date(work.datework).toLocaleDateString('th-TH')}</td>
+                    <tr key={work.work_id}>
+                      <td><Badge bg="secondary">#{work.work_id}</Badge></td>
+                      <td className="text-start fw-semibold">{work.job_name}</td>
+                      <td><Badge bg="info" text="dark">{work.job_type || '-'}</Badge></td>
+                      <td>{work.start_date ? new Date(work.start_date).toLocaleDateString('th-TH') : '-'}</td>
                       <td className="text-start" style={{ maxWidth: '200px' }}>
-                        <small className="text-muted">{work.detail.substring(0, 40) + '...'}</small>
+                        <small className="text-muted">{work.job_detail ? work.job_detail.substring(0, 40) + '...' : '-'}</small>
                       </td>
-                      <td className="text-start"><small>{work.role}</small></td>
+                      <td className="text-start"><small>{work.location || '-'}</small></td>
                       <td>
                         {getStatusBadge(work)}
                       </td>
@@ -630,23 +602,18 @@ const AdminRecord = ({ works, setWorks, tasks, setTasks }) => {
                             <Dropdown.Item onClick={() => handleShowDetail(work)}>
                               <i className="bi bi-eye me-2 text-primary"></i>ดูรายละเอียด
                             </Dropdown.Item>
-
-                            {!work.completed && (
-                              <>
-                                <Dropdown.Item onClick={() => handleEdit(work)}>
-                                  <i className="bi bi-pencil me-2 text-warning"></i>แก้ไขข้อมูล
-                                </Dropdown.Item>
-
-                                {work.status === 'Draft' && (
-                                  <Dropdown.Item onClick={() => handleSendToLeader(work.id)}>
-                                    <i className="bi bi-send me-2 text-success"></i>ส่งให้ Leader
-                                  </Dropdown.Item>
-                                )}
-                              </>
+                            <Dropdown.Item onClick={() => handleEdit(work)}>
+                              <i className="bi bi-pencil me-2 text-warning"></i>แก้ไขข้อมูล
+                            </Dropdown.Item>
+                            {work.status === 'รอดำเนินการ' && (
+                              <Dropdown.Item onClick={() => handleSendToLeader(work.work_id)}>
+                                <i className="bi bi-send me-2 text-success"></i>ส่งให้หัวหน้าช่าง
+                              </Dropdown.Item>
                             )}
-
                             <Dropdown.Divider />
-                            <Dropdown.Item onClick={() => handleDelete(work.id)} className="text-danger"><i className="bi bi-trash me-2"></i>ลบ</Dropdown.Item>
+                            <Dropdown.Item onClick={() => handleDelete(work.work_id)} className="text-danger">
+                              <i className="bi bi-trash me-2"></i>ลบ
+                            </Dropdown.Item>
                           </Dropdown.Menu>
                         </Dropdown>
                       </td>
