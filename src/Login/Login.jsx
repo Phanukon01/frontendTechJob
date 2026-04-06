@@ -2,11 +2,18 @@ import { useState } from "react";
 
 const LoginPage = ({ onLogin }) => {
   const [mode, setMode] = useState("login");
-  const [email, setEmail] = useState(""); // ใช้เป็น Username หรือ Email
+
+  const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [newPassword, setNewPassword] = useState("");
+
+  const [registerData, setRegisterData] = useState({
+    username: "", name: "", email: "", password: "", phone: "", department: ""
+  });
+
   const [error, setError] = useState("");
   const [isLoading, setIsLoading] = useState(false);
+
   const [successPopup, setSuccessPopup] = useState({ show: false, message: "" });
 
   const API_URL = "http://localhost:3000/users";
@@ -32,6 +39,7 @@ const LoginPage = ({ onLogin }) => {
       const response = await fetch(`${API_URL}/login`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
+        // [แก้ไขที่นี่] เปลี่ยนจาก email เป็น username เพื่อให้ Backend หาเจอ
         body: JSON.stringify({ username: email, password }),
       });
 
@@ -41,7 +49,7 @@ const LoginPage = ({ onLogin }) => {
         showSuccess(`ยินดีต้อนรับ ${data.user?.name || data.user?.username || email}`);
         if (onLogin) onLogin(data.user);
       } else {
-        setError(data.message || "Username หรือ Password ไม่ถูกต้อง");
+        setError(data.message || "การเข้าสู่ระบบล้มเหลว");
       }
     } catch (err) {
       setError("ไม่สามารถเชื่อมต่อกับเซิร์ฟเวอร์ได้");
@@ -83,18 +91,32 @@ const LoginPage = ({ onLogin }) => {
     }
   };
 
+  const LogoSection = () => (
+    <div className="flex items-center m-10 lg:m-20">
+      <div className="text-6xl font-normal text-gray-800">Tech</div>
+      <div className="text-6xl text-white text-center bg-blue-400 rounded-full h-32 w-32 flex items-center justify-center ml-2 shadow-lg">
+        Job
+      </div>
+    </div>
+  );
+
   return (
-    <div className="min-h-screen bg-blue-100 flex flex-col items-center justify-center p-4 relative">
+    <div className="min-h-screen bg-blue-100 flex flex-col lg:flex-row items-center justify-center p-4 relative">
       {successPopup.show && (
-        <div className="absolute top-10 left-1/2 transform -translate-x-1/2 bg-green-100 border border-green-400 text-green-700 px-6 py-4 rounded-xl shadow-2xl z-50 flex items-center">
+        <div className="absolute top-10 left-1/2 transform -translate-x-1/2 bg-green-100 border border-green-400 text-green-700 px-6 py-4 rounded-xl shadow-2xl z-50 transition-all flex items-center">
+          <svg className="w-6 h-6 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M5 13l4 4L19 7"></path></svg>
           <span className="font-semibold">{successPopup.message}</span>
         </div>
       )}
 
-      <div className="bg-white rounded-xl shadow-2xl w-full max-w-md p-10 border-t-8 border-blue-400">
-        <h2 className="text-2xl font-bold text-center text-gray-800 mb-6">
-          {mode === "login" ? "เข้าสู่ระบบ TechJob" : "ตั้งรหัสผ่านใหม่"}
-        </h2>
+      <LogoSection />
+
+      <div className="bg-white rounded-xl shadow-2xl w-full max-w-md p-10 border-t-8 border-blue-400 transition-all">
+        <div className="text-center mb-6">
+          <h2 className="text-2xl font-bold text-gray-800">
+            {mode === "login" ? "เข้าสู่ระบบ TechJob" : mode === "register" ? "สมัครสมาชิกใหม่" : "ตั้งรหัสผ่านใหม่"}
+          </h2>
+        </div>
 
         {error && (
           <div className="bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded-lg text-sm mb-6 text-center">
@@ -102,47 +124,84 @@ const LoginPage = ({ onLogin }) => {
           </div>
         )}
 
-        {mode === "login" ? (
+        {mode === "login" && (
           <div className="space-y-6">
             <input
               type="text"
               value={email}
               onChange={(e) => setEmail(e.target.value)}
-              className="w-full px-4 py-3 bg-blue-50 border border-blue-200 rounded-lg focus:ring-blue-400"
+              className="w-full px-4 py-3 bg-blue-50 border border-blue-200 rounded-lg focus:ring-1 focus:ring-blue-400 focus:border-blue-400 transition placeholder-gray-500"
               placeholder="Username หรือ Email"
+              disabled={isLoading}
             />
             <input
               type="password"
               value={password}
               onChange={(e) => setPassword(e.target.value)}
-              className="w-full px-4 py-3 bg-blue-50 border border-blue-200 rounded-lg focus:ring-blue-400"
+              onKeyDown={(e) => e.key === 'Enter' && handleLogin(e)}
+              className="w-full px-4 py-3 bg-blue-50 border border-blue-200 rounded-lg focus:ring-1 focus:ring-blue-400 focus:border-blue-400 transition placeholder-gray-500"
               placeholder="Password"
+              disabled={isLoading}
             />
-            <button onClick={handleLogin} disabled={isLoading} className="w-full text-white py-3 rounded-lg font-bold bg-blue-400 hover:bg-blue-500 disabled:opacity-50">
+            <button
+              onClick={handleLogin}
+              disabled={isLoading}
+              className="w-full text-white py-3 rounded-lg font-bold shadow-md hover:opacity-90 transition disabled:opacity-50 bg-blue-400 hover:bg-blue-500"
+            >
               {isLoading ? "กำลังตรวจสอบ..." : "Login"}
             </button>
-            <div className="text-center">
-              <button className="text-blue-600 hover:text-blue-800 text-sm font-medium" onClick={() => setMode("forgot")}>
+
+            <div className="flex justify-between mt-4 text-sm">
+              <button className="text-blue-600 hover:text-blue-800 font-medium" onClick={() => { setMode("forgot"); setError(""); }}>
                 ลืมรหัสผ่าน?
               </button>
             </div>
           </div>
-        ) : (
-          <div className="space-y-6">
-            <input type="email" value={email} onChange={(e) => setEmail(e.target.value)} placeholder="Email ที่ลงทะเบียนไว้"
-              className="w-full px-4 py-3 bg-blue-50 border border-blue-200 rounded-lg" />
-            <input type="password" value={newPassword} onChange={(e) => setNewPassword(e.target.value)} placeholder="รหัสผ่านใหม่"
-              className="w-full px-4 py-3 bg-blue-50 border border-blue-200 rounded-lg" />
-            <button onClick={handleForgotPassword} disabled={isLoading} className="w-full text-white py-3 rounded-lg font-bold bg-yellow-500 hover:bg-yellow-600">
-              ยืนยันการเปลี่ยนรหัสผ่าน
+        )}
+
+        {mode === "register" && (
+          <div className="space-y-4">
+            <div className="grid grid-cols-2 gap-4">
+              <input type="text" placeholder="Username" className="w-full px-4 py-3 bg-blue-50 border border-blue-200 rounded-lg focus:ring-1 focus:ring-blue-400"
+                value={registerData.username} onChange={(e) => setRegisterData({ ...registerData, username: e.target.value })} disabled={isLoading} />
+              <input type="text" placeholder="ชื่อ-นามสกุล" className="w-full px-4 py-3 bg-blue-50 border border-blue-200 rounded-lg focus:ring-1 focus:ring-blue-400"
+                value={registerData.name} onChange={(e) => setRegisterData({ ...registerData, name: e.target.value })} disabled={isLoading} />
+            </div>
+            <input type="email" placeholder="Email" className="w-full px-4 py-3 bg-blue-50 border border-blue-200 rounded-lg focus:ring-1 focus:ring-blue-400"
+              value={registerData.email} onChange={(e) => setRegisterData({ ...registerData, email: e.target.value })} disabled={isLoading} />
+            <input type="password" placeholder="Password" className="w-full px-4 py-3 bg-blue-50 border border-blue-200 rounded-lg focus:ring-1 focus:ring-blue-400"
+              value={registerData.password} onChange={(e) => setRegisterData({ ...registerData, password: e.target.value })} disabled={isLoading} />
+
+            <button onClick={handleRegister} disabled={isLoading} className="w-full text-white py-3 rounded-lg font-bold shadow-md transition disabled:opacity-50 bg-blue-500 hover:bg-blue-600">
+              {isLoading ? "กำลังบันทึก..." : "ยืนยันการสมัคร"}
             </button>
-            <div className="text-center">
-              <button className="text-gray-500 text-sm" onClick={() => setMode("login")}>
+            <div className="text-center mt-4 text-sm">
+              <button className="text-gray-500 hover:text-blue-600" onClick={() => { setMode("login"); setError(""); }}>
                 ย้อนกลับไปหน้าเข้าสู่ระบบ
               </button>
             </div>
           </div>
         )}
+
+        {mode === "forgot" && (
+          <div className="space-y-6">
+            <p className="text-sm text-gray-500 text-center">กรอกอีเมลของคุณและรหัสผ่านใหม่ที่ต้องการตั้ง</p>
+            <input type="email" value={email} onChange={(e) => setEmail(e.target.value)} placeholder="Email ที่ลงทะเบียนไว้"
+              className="w-full px-4 py-3 bg-blue-50 border border-blue-200 rounded-lg focus:ring-1 focus:ring-blue-400" disabled={isLoading} />
+            <input type="password" value={newPassword} onChange={(e) => setNewPassword(e.target.value)} placeholder="รหัสผ่านใหม่"
+              className="w-full px-4 py-3 bg-blue-50 border border-blue-200 rounded-lg focus:ring-1 focus:ring-blue-400" disabled={isLoading} />
+
+            <button onClick={handleForgotPassword} disabled={isLoading} className="w-full text-white py-3 rounded-lg font-bold shadow-md transition disabled:opacity-50 bg-yellow-500 hover:bg-yellow-600">
+              {isLoading ? "กำลังรีเซ็ต..." : "ตั้งรหัสผ่านใหม่"}
+            </button>
+            <div className="text-center mt-4 text-sm">
+              <button className="text-gray-500 hover:text-blue-600" onClick={() => { setMode("login"); setError(""); }}>
+                ย้อนกลับไปหน้าเข้าสู่ระบบ
+              </button>
+            </div>
+          </div>
+        )}
+
       </div>
     </div>
   );
